@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Authentication (NextAuth.js Prisma Adapter)
+// ============================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// Users
+// ============================================
+
+enum UserRole {
+  CLIENT
+  CLEANER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // For email/password auth
+  phone         String?
+  role          UserRole  @default(CLIENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts       Account[]
+  sessions       Session[]
+  cleanerProfile CleanerProfile?
+
+  // Client relations
+  jobsAsClient      Job[]          @relation("ClientJobs")
+  reviewsGiven      Review[]       @relation("ReviewsGiven")
+
+  // Cleaner relations
+  jobApplications   JobApplication[]
+  jobsAsCleaner     Job[]          @relation("CleanerJobs")
+  reviewsReceived   Review[]       @relation("ReviewsReceived")
+  favoriteCleaners  User[]         @relation("FavoriteCleaners")
+  favoritedBy       User[]         @relation("FavoriteCleaners")
+
+  @@index([email])
+  @@index([role])
+}
+
+// ============================================
+// Cleaner Profile
+// ============================================
+
+model CleanerProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  bio                 String?  @db.Text
+  animalExperience    String?  @db.Text  // Background with animals
+  serviceAreas        String[] // Neighborhoods/areas they serve
+  yearsExperience     Int?
+  hasTransportation   Boolean  @default(false)
+  backgroundCheckDate DateTime?
+  isApproved          Boolean  @default(false) // Admin approval
+  stripeAccountId     String?  // Stripe Connect account
+  stripeOnboarded     Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// Jobs
+// ============================================
+
+enum AnimalType {
+  DOG
+  CAT
+  BIRD
+  HORSE
+  GOAT
+  CHICKEN
+  PIG
+  COW
+  RABBIT
+  OTHER
+}
+
+enum EnclosureType {
+  CAGE
+  PEN
+  BARN
+  STABLE
+  COOP
+  YARD
+  KENNEL
+  OTHER
+}
+
+enum JobStatus {
+  OPEN          // Client created, accepting applications
+  PENDING       // Cleaner assigned, awaiting job completion
+  IN_PROGRESS   // Cleaner is working on the job
+  COMPLETED     // Cleaner finished, photos uploaded
+  CONFIRMED     // Client confirmed completion
+  PAID          // Payment processed
+  CANCELLED     // Job was cancelled
+  DISPUTED      // There's an issue to resolve
+}
+
+model Job {
+  id              String        @id @default(cuid())
+  clientId        String
+  cleanerId       String?       // Assigned after client confirms
+
+  // Job details
+  title           String
+  description     String        @db.Text
+  animalTypes     AnimalType[]
+  enclosureType   EnclosureType
+  enclosureSize   String?       // e.g., "10x10 feet", "small", "large"
+  numberOfAnimals Int           @default(1)
+
+  // Location
+  address         String
+  city            String        @default("Birmingham")
+  state           String        @default("AL")
+  zipCode         String
+
+  // Scheduling
+  preferredDates  DateTime[]    // Client's available dates
+  scheduledDate   DateTime?     // Confirmed job date
+
+  // Pricing
+  suggestedPrice  Decimal?      @db.Decimal(10, 2)
+  agreedPrice     Decimal?      @db.Decimal(10, 2)
+  platformFee     Decimal?      @db.Decimal(10, 2) // 20%
+  cleanerPayout   Decimal?      @db.Decimal(10, 2) // 80%
+
+  // Status
+  status          JobStatus     @default(OPEN)
+
+  // Payment
+  stripePaymentIntentId String?
+  paidAt          DateTime?
+
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  completedAt     DateTime?
+  confirmedAt     DateTime?
+
+  // Relations
+  client          User          @relation("ClientJobs", fields: [clientId], references: [id], onDelete: Cascade)
+  cleaner         User?         @relation("CleanerJobs", fields: [cleanerId], references: [id])
+  applications    JobApplication[]
+  photos          Photo[]
+  reviews         Review[]
+
+  @@index([clientId])
+  @@index([cleanerId])
+  @@index([status])
+  @@index([city])
+}
+
+// ============================================
+// Job Applications
+// ============================================
+
+enum ApplicationStatus {
+  PENDING   // Cleaner applied, waiting for client
+  ACCEPTED  // Client chose this cleaner
+  REJECTED  // Client chose someone else
+  WITHDRAWN // Cleaner withdrew application
+}
+
+model JobApplication {
+  id          String            @id @default(cuid())
+  jobId       String
+  cleanerId   String
+  message     String?           @db.Text  // Note to client
+  proposedPrice Decimal?        @db.Decimal(10, 2)
+  status      ApplicationStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  job     Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner User @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, cleanerId]) // One application per cleaner per job
+  @@index([jobId])
+  @@index([cleanerId])
+  @@index([status])
+}
+
+// ============================================
+// Photos
+// ============================================
+
+enum PhotoType {
+  BEFORE    // Before cleanup (client uploads)
+  AFTER     // After cleanup (cleaner uploads)
+  ISSUE     // Problem documentation
+}
+
+model Photo {
+  id          String    @id @default(cuid())
+  jobId       String
+  uploaderId  String
+  url         String
+  key         String    // S3 key
+  type        PhotoType
+  caption     String?
+  createdAt   DateTime  @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
+// ============================================
+// Reviews
+// ============================================
+
+model Review {
+  id          String   @id @default(cuid())
+  jobId       String
+  reviewerId  String   // Who wrote the review
+  revieweeId  String   // Who is being reviewed
+  rating      Int      // 1-5 stars
+  comment     String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  job      Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  reviewer User @relation("ReviewsGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewee User @relation("ReviewsReceived", fields: [revieweeId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, reviewerId]) // One review per person per job
+  @@index([revieweeId])
+  @@index([rating])
+}

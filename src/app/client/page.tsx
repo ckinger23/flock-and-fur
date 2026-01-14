@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -10,6 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StarRating } from "@/components/star-rating";
+import { getFavoriteCleaners } from "@/lib/actions/favorites";
 
 const statusColors: Record<string, string> = {
   OPEN: "bg-blue-100 text-blue-800",
@@ -48,6 +52,9 @@ export default async function ClientDashboard() {
   const totalJobs = stats.reduce((acc, s) => acc + s._count, 0);
   const openJobs = stats.find((s) => s.status === "OPEN")?._count || 0;
   const completedJobs = stats.find((s) => s.status === "PAID")?._count || 0;
+
+  // Get favorite cleaners
+  const { favorites } = await getFavoriteCleaners();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -149,6 +156,55 @@ export default async function ClientDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Favorite Cleaners */}
+      {favorites && favorites.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Your Favorite Cleaners</CardTitle>
+            <CardDescription>
+              Cleaners you&apos;ve worked with before
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {favorites.map((cleaner) => (
+                <div
+                  key={cleaner.id}
+                  className="p-4 rounded-lg border bg-card"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center font-medium">
+                      {cleaner.name?.[0] || "C"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{cleaner.name}</p>
+                      {cleaner.cleanerProfile?.yearsExperience && (
+                        <p className="text-xs text-muted-foreground">
+                          {cleaner.cleanerProfile.yearsExperience} yrs exp
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {cleaner.totalReviews > 0 && (
+                    <StarRating
+                      rating={cleaner.averageRating}
+                      size="sm"
+                    />
+                  )}
+                  {cleaner.cleanerProfile?.serviceAreas &&
+                    cleaner.cleanerProfile.serviceAreas.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Serves: {cleaner.cleanerProfile.serviceAreas.slice(0, 2).join(", ")}
+                      {cleaner.cleanerProfile.serviceAreas.length > 2 && "..."}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

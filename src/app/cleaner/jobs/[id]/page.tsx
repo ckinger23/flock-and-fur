@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
@@ -13,6 +15,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ApplyForm } from "./apply-form";
 import { CleanerJobActions } from "./cleaner-job-actions";
+import { PhotoUploadSection } from "./photo-upload-section";
+import { PhotoGallery } from "@/components/photo-gallery";
+import { ReviewForm } from "@/components/review-form";
+import { StarRating } from "@/components/star-rating";
+import { JobStatusTimeline } from "@/components/job-status-timeline";
 
 const statusColors: Record<string, string> = {
   OPEN: "bg-blue-100 text-blue-800",
@@ -38,14 +45,15 @@ export default async function CleanerJobDetailPage({
     where: { id },
     include: {
       client: {
-        select: { name: true },
+        select: { id: true, name: true },
       },
       applications: {
         where: { cleanerId: userId },
       },
       photos: {
-        where: { type: "AFTER" },
+        orderBy: { createdAt: "desc" },
       },
+      reviews: true,
     },
   });
 
@@ -56,6 +64,12 @@ export default async function CleanerJobDetailPage({
   const hasApplied = job.applications.length > 0;
   const application = job.applications[0];
   const isAssigned = job.cleanerId === userId;
+  const afterPhotos = job.photos.filter((p) => p.type === "AFTER");
+  const canUploadPhotos = isAssigned && job.status === "IN_PROGRESS";
+
+  // Check if cleaner has already reviewed
+  const cleanerReview = job.reviews.find((r) => r.reviewerId === userId);
+  const clientReview = job.reviews.find((r) => r.reviewerId === job.clientId);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -84,7 +98,10 @@ export default async function CleanerJobDetailPage({
         </div>
 
         {isAssigned && (
-          <CleanerJobActions job={job} hasCompletionPhotos={job.photos.length > 0} />
+          <CleanerJobActions
+            job={job}
+            hasCompletionPhotos={afterPhotos.length > 0}
+          />
         )}
       </div>
 
@@ -159,6 +176,24 @@ export default async function CleanerJobDetailPage({
             </CardContent>
           </Card>
 
+          {/* Photo Upload (when job is in progress) */}
+          {canUploadPhotos && <PhotoUploadSection jobId={job.id} />}
+
+          {/* Completion Photos */}
+          {isAssigned && afterPhotos.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Completion Photos</CardTitle>
+                <CardDescription>
+                  Photos uploaded to verify job completion
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PhotoGallery photos={afterPhotos} />
+              </CardContent>
+            </Card>
+          )}
+
           {/* Application Form / Status */}
           {job.status === "OPEN" && !hasApplied && (
             <ApplyForm jobId={job.id} suggestedPrice={job.suggestedPrice} />
@@ -180,9 +215,7 @@ export default async function CleanerJobDetailPage({
                   </p>
                   {application.proposedPrice && (
                     <p>
-                      <span className="text-muted-foreground">
-                        Your Quote:
-                      </span>{" "}
+                      <span className="text-muted-foreground">Your Quote:</span>{" "}
                       ${Number(application.proposedPrice).toFixed(2)}
                     </p>
                   )}
@@ -193,6 +226,47 @@ export default async function CleanerJobDetailPage({
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Review Section */}
+          {job.status === "PAID" && isAssigned && !cleanerReview && (
+            <ReviewForm
+              jobId={job.id}
+              revieweeId={job.clientId}
+              revieweeName={job.client.name || "the client"}
+              revieweeRole="client"
+            />
+          )}
+
+          {/* Display Reviews */}
+          {(cleanerReview || clientReview) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Reviews</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {cleanerReview && (
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <p className="text-sm font-medium mb-1">Your review</p>
+                    <StarRating rating={cleanerReview.rating} />
+                    {cleanerReview.comment && (
+                      <p className="text-sm mt-2">{cleanerReview.comment}</p>
+                    )}
+                  </div>
+                )}
+                {clientReview && (
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <p className="text-sm font-medium mb-1">
+                      {job.client.name}&apos;s review of you
+                    </p>
+                    <StarRating rating={clientReview.rating} />
+                    {clientReview.comment && (
+                      <p className="text-sm mt-2">{clientReview.comment}</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -237,40 +311,32 @@ export default async function CleanerJobDetailPage({
             </CardContent>
           </Card>
 
-          {/* Status Info */}
+          {/* Job Progress Timeline */}
           {isAssigned && (
             <Card>
               <CardHeader>
-                <CardTitle>Job Status</CardTitle>
+                <CardTitle>Job Progress</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm">
-                  {job.status === "PENDING" && (
-                    <p className="text-muted-foreground">
-                      You&apos;ve been assigned to this job. Start working when
-                      ready.
-                    </p>
-                  )}
-                  {job.status === "IN_PROGRESS" && (
-                    <p className="text-muted-foreground">
-                      Job is in progress. Upload photos when complete.
-                    </p>
-                  )}
-                  {job.status === "COMPLETED" && (
-                    <p className="text-muted-foreground">
-                      Waiting for client to confirm and process payment.
-                    </p>
-                  )}
-                  {job.status === "CONFIRMED" && (
-                    <p className="text-muted-foreground">
-                      Client has confirmed. Payment is being processed.
-                    </p>
-                  )}
-                  {job.status === "PAID" && (
-                    <p className="text-green-600 font-medium">
-                      Payment received! ${Number(job.cleanerPayout).toFixed(2)}
-                    </p>
-                  )}
+              <CardContent className="space-y-4">
+                <JobStatusTimeline currentStatus={job.status} />
+
+                {/* Contextual Help */}
+                <div className="pt-2 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    {job.status === "PENDING" &&
+                      "You've been assigned to this job. Start working when ready."}
+                    {job.status === "IN_PROGRESS" &&
+                      "Upload completion photos before marking complete."}
+                    {job.status === "COMPLETED" &&
+                      "Waiting for client to confirm and process payment."}
+                    {job.status === "CONFIRMED" &&
+                      "Client has confirmed. Payment is being processed."}
+                    {job.status === "PAID" && (
+                      <span className="text-green-600 font-medium">
+                        Payment received! ${Number(job.cleanerPayout).toFixed(2)}
+                      </span>
+                    )}
+                  </p>
                 </div>
               </CardContent>
             </Card>

@@ -15,14 +15,16 @@ import {
 } from "@/components/ui/card";
 import { applyToJob } from "@/lib/actions/jobs";
 import { toast } from "sonner";
-import { Decimal } from "@prisma/client/runtime/library";
+
+// Prisma Decimal is serialized when passed to client components
+type DecimalLike = { toString(): string } | string | number | null;
 
 export function ApplyForm({
   jobId,
   suggestedPrice,
 }: {
   jobId: string;
-  suggestedPrice: Decimal | null;
+  suggestedPrice: DecimalLike;
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);

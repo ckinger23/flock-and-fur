@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
@@ -70,6 +72,14 @@ export default async function AdminDashboard() {
             Overview of the Flock & Fur platform
           </p>
         </div>
+        <div className="flex gap-2">
+          <Link href="/admin/analytics">
+            <Button variant="outline">View Analytics</Button>
+          </Link>
+          <Link href="/admin/disputes">
+            <Button variant="outline">Manage Disputes</Button>
+          </Link>
+        </div>
       </div>
 
       {/* User Stats */}
@@ -132,14 +142,16 @@ export default async function AdminDashboard() {
             </CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Disputed</CardDescription>
-            <CardTitle className="text-2xl text-orange-600">
-              {disputedJobs}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+        <Link href="/admin/disputes">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-2">
+              <CardDescription>Disputed</CardDescription>
+              <CardTitle className="text-2xl text-orange-600">
+                {disputedJobs}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
       </div>
 
       {/* Recent Jobs */}

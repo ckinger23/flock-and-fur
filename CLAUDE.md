@@ -58,19 +58,19 @@ A two-sided marketplace connecting animal owners with professional animal mess c
 - [x] Client: confirm cleaner selection
 - [x] Basic admin dashboard
 
-### Phase 2 - Core Operations
-- [ ] Stripe Connect integration
-- [ ] Photo uploads for job completion (AWS S3)
-- [ ] Rating system (bidirectional)
-- [ ] Job status workflow UI
-- [ ] Payment processing and payouts
+### Phase 2 - Core Operations ✅ COMPLETE
+- [x] Stripe Connect integration (cleaner onboarding + destination charges)
+- [x] Photo uploads for job completion (AWS S3 with presigned URLs)
+- [x] Rating system (bidirectional client/cleaner reviews)
+- [x] Job status workflow UI (visual timeline component)
+- [x] Payment processing and payouts (Stripe Checkout + webhooks)
 
-### Phase 3 - Polish
-- [ ] Email notifications
-- [ ] Cleaner favorites / request previous cleaner
-- [ ] Dispute handling in admin
-- [ ] Analytics dashboard
-- [ ] PWA capabilities
+### Phase 3 - Polish ✅ COMPLETE
+- [x] Email notifications (Resend integration with templates)
+- [x] Cleaner favorites / request previous cleaner
+- [x] Dispute handling in admin (full workflow)
+- [x] Analytics dashboard (revenue, users, jobs metrics)
+- [x] PWA capabilities (service worker, install prompt, offline support)
 
 ## Project Structure
 
@@ -120,6 +120,10 @@ AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_REGION=
 AWS_S3_BUCKET=
+
+# Email (Resend)
+RESEND_API_KEY=
+EMAIL_FROM=Flock & Fur <noreply@yourdomain.com>
 ```
 
 ## Getting Started
@@ -152,14 +156,15 @@ AWS_S3_BUCKET=
 ## Commands
 
 ```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run start        # Start production server
-npm run db:generate  # Generate Prisma client
-npm run db:push      # Push schema to database
-npm run db:migrate   # Run migrations
-npm run db:studio    # Open Prisma Studio
-npm run lint         # Run ESLint
+npm run dev            # Start development server
+npm run build          # Build for production
+npm run start          # Start production server
+npm run db:generate    # Generate Prisma client
+npm run db:push        # Push schema to database
+npm run db:migrate     # Run migrations
+npm run db:studio      # Open Prisma Studio
+npm run lint           # Run ESLint
+npm run generate:icons # Regenerate PWA icons
 ```
 
 ## Geographic Scope

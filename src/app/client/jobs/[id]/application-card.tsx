@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { acceptApplication } from "@/lib/actions/jobs";
 import { toast } from "sonner";
-import { Decimal } from "@prisma/client/runtime/library";
+
+// Prisma Decimal is serialized when passed to client components
+type DecimalLike = { toString(): string } | string | number | null;
 
 interface Application {
   id: string;
   message: string | null;
-  proposedPrice: Decimal | null;
+  proposedPrice: DecimalLike;
   createdAt: Date;
   cleaner: {
     id: string;
@@ -29,7 +31,7 @@ export function ApplicationCard({
   suggestedPrice,
 }: {
   application: Application;
-  suggestedPrice: Decimal | null;
+  suggestedPrice: DecimalLike;
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);

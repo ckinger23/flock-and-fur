@@ -4,6 +4,15 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { AnimalType, EnclosureType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import {
+  sendEmail,
+  applicationReceivedEmail,
+  applicationAcceptedEmail,
+  jobStartedEmail,
+  jobCompletedEmail,
+  jobConfirmedEmail,
+  BASE_URL,
+} from "@/lib/email";
 
 interface CreateJobInput {
   title: string;
@@ -85,11 +94,20 @@ export async function applyToJob(jobId: string, message?: string, proposedPrice?
     // Check if job is still open
     const job = await db.job.findUnique({
       where: { id: jobId },
+      include: {
+        client: { select: { name: true, email: true } },
+      },
     });
 
     if (!job || job.status !== "OPEN") {
       return { error: "This job is no longer accepting applications" };
     }
+
+    // Get cleaner's name
+    const cleaner = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true },
+    });
 
     await db.jobApplication.create({
       data: {
@@ -99,6 +117,22 @@ export async function applyToJob(jobId: string, message?: string, proposedPrice?
         proposedPrice,
       },
     });
+
+    // Send email to client
+    if (job.client.email) {
+      const emailData = applicationReceivedEmail({
+        clientName: job.client.name || "there",
+        jobTitle: job.title,
+        cleanerName: cleaner?.name || "A cleaner",
+        proposedPrice: proposedPrice,
+        message: message,
+        jobUrl: `${BASE_URL}/client/jobs/${jobId}`,
+      });
+      await sendEmail({
+        to: job.client.email,
+        ...emailData,
+      });
+    }
 
     revalidatePath(`/client/jobs/${jobId}`);
     revalidatePath("/cleaner/jobs");
@@ -122,7 +156,7 @@ export async function acceptApplication(applicationId: string) {
       where: { id: applicationId },
       include: {
         job: true,
-        cleaner: true,
+        cleaner: { select: { id: true, name: true, email: true } },
       },
     });
 
@@ -137,6 +171,9 @@ export async function acceptApplication(applicationId: string) {
     if (application.job.status !== "OPEN") {
       return { error: "This job is no longer accepting applications" };
     }
+
+    const agreedPrice = application.proposedPrice || application.job.suggestedPrice;
+    const agreedPriceNum = agreedPrice ? Number(agreedPrice) : 0;
 
     // Update job with selected cleaner
     await db.$transaction([
@@ -159,20 +196,34 @@ export async function acceptApplication(applicationId: string) {
         data: {
           status: "PENDING",
           cleanerId: application.cleanerId,
-          agreedPrice: application.proposedPrice || application.job.suggestedPrice,
-          platformFee: application.proposedPrice
-            ? Number(application.proposedPrice) * 0.2
-            : application.job.suggestedPrice
-            ? Number(application.job.suggestedPrice) * 0.2
-            : null,
-          cleanerPayout: application.proposedPrice
-            ? Number(application.proposedPrice) * 0.8
-            : application.job.suggestedPrice
-            ? Number(application.job.suggestedPrice) * 0.8
-            : null,
+          agreedPrice: agreedPrice,
+          platformFee: agreedPriceNum * 0.2,
+          cleanerPayout: agreedPriceNum * 0.8,
         },
       }),
     ]);
+
+    // Get client name for the email
+    const client = await db.user.findUnique({
+      where: { id: application.job.clientId },
+      select: { name: true },
+    });
+
+    // Send email to cleaner
+    if (application.cleaner.email) {
+      const emailData = applicationAcceptedEmail({
+        cleanerName: application.cleaner.name || "there",
+        jobTitle: application.job.title,
+        clientName: client?.name || "The client",
+        agreedPrice: agreedPriceNum,
+        jobAddress: `${application.job.address}, ${application.job.city}, ${application.job.state} ${application.job.zipCode}`,
+        jobUrl: `${BASE_URL}/cleaner/jobs/${application.jobId}`,
+      });
+      await sendEmail({
+        to: application.cleaner.email,
+        ...emailData,
+      });
+    }
 
     revalidatePath(`/client/jobs/${application.jobId}`);
     revalidatePath("/cleaner/jobs");
@@ -197,6 +248,10 @@ export async function updateJobStatus(
 
     const job = await db.job.findUnique({
       where: { id: jobId },
+      include: {
+        client: { select: { name: true, email: true } },
+        cleaner: { select: { name: true, email: true } },
+      },
     });
 
     if (!job) {
@@ -238,6 +293,39 @@ export async function updateJobStatus(
       where: { id: jobId },
       data: updateData,
     });
+
+    // Send email notifications based on status change
+    if (status === "IN_PROGRESS" && job.client.email) {
+      const emailData = jobStartedEmail({
+        clientName: job.client.name || "there",
+        jobTitle: job.title,
+        cleanerName: job.cleaner?.name || "Your cleaner",
+        jobUrl: `${BASE_URL}/client/jobs/${jobId}`,
+      });
+      await sendEmail({ to: job.client.email, ...emailData });
+    }
+
+    if (status === "COMPLETED" && job.client.email) {
+      const emailData = jobCompletedEmail({
+        clientName: job.client.name || "there",
+        jobTitle: job.title,
+        cleanerName: job.cleaner?.name || "Your cleaner",
+        agreedPrice: Number(job.agreedPrice) || 0,
+        jobUrl: `${BASE_URL}/client/jobs/${jobId}`,
+      });
+      await sendEmail({ to: job.client.email, ...emailData });
+    }
+
+    if (status === "CONFIRMED" && job.cleaner?.email) {
+      const emailData = jobConfirmedEmail({
+        cleanerName: job.cleaner.name || "there",
+        jobTitle: job.title,
+        clientName: job.client.name || "The client",
+        cleanerPayout: Number(job.cleanerPayout) || 0,
+        jobUrl: `${BASE_URL}/cleaner/jobs/${jobId}`,
+      });
+      await sendEmail({ to: job.cleaner.email, ...emailData });
+    }
 
     revalidatePath(`/client/jobs/${jobId}`);
     revalidatePath(`/cleaner/jobs/${jobId}`);

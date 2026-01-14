@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
@@ -13,6 +15,12 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { JobActions } from "./job-actions";
 import { ApplicationCard } from "./application-card";
+import { PhotoGallery } from "@/components/photo-gallery";
+import { ReviewForm } from "@/components/review-form";
+import { StarRating } from "@/components/star-rating";
+import { JobStatusTimeline } from "@/components/job-status-timeline";
+import { FavoriteButton } from "@/components/favorite-button";
+import { isFavoriteCleaner } from "@/lib/actions/favorites";
 
 const statusColors: Record<string, string> = {
   OPEN: "bg-blue-100 text-blue-800",
@@ -77,6 +85,21 @@ export default async function JobDetailPage({
   const pendingApplications = job.applications.filter(
     (app) => app.status === "PENDING"
   );
+
+  const completionPhotos = job.photos.filter((p) => p.type === "AFTER");
+
+  // Check if client has already reviewed
+  const clientReview = job.reviews.find(
+    (r) => r.reviewerId === session?.user?.id
+  );
+  const cleanerReview = job.reviews.find(
+    (r) => r.reviewerId === job.cleanerId
+  );
+
+  // Check if cleaner is favorited
+  const isCleanerFavorited = job.cleanerId
+    ? await isFavoriteCleaner(job.cleanerId)
+    : false;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -203,17 +226,82 @@ export default async function JobDetailPage({
                 <CardTitle>Assigned Cleaner</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-lg font-medium">
-                    {job.cleaner.name?.[0] || "C"}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-lg font-medium">
+                      {job.cleaner.name?.[0] || "C"}
+                    </div>
+                    <div>
+                      <p className="font-medium">{job.cleaner.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {job.cleaner.email}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">{job.cleaner.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {job.cleaner.email}
-                    </p>
-                  </div>
+                  {job.status === "PAID" && job.cleanerId && (
+                    <FavoriteButton
+                      cleanerId={job.cleanerId}
+                      cleanerName={job.cleaner.name || "this cleaner"}
+                      isFavorite={isCleanerFavorited}
+                    />
+                  )}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Completion Photos */}
+          {completionPhotos.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Completion Photos</CardTitle>
+                <CardDescription>
+                  Photos uploaded by the cleaner to verify job completion
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PhotoGallery photos={completionPhotos} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Review Section */}
+          {job.status === "PAID" && job.cleaner && !clientReview && (
+            <ReviewForm
+              jobId={job.id}
+              revieweeId={job.cleanerId!}
+              revieweeName={job.cleaner.name || "the cleaner"}
+              revieweeRole="cleaner"
+            />
+          )}
+
+          {/* Display Reviews */}
+          {(clientReview || cleanerReview) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Reviews</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {clientReview && (
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <p className="text-sm font-medium mb-1">Your review</p>
+                    <StarRating rating={clientReview.rating} />
+                    {clientReview.comment && (
+                      <p className="text-sm mt-2">{clientReview.comment}</p>
+                    )}
+                  </div>
+                )}
+                {cleanerReview && (
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <p className="text-sm font-medium mb-1">
+                      {job.cleaner?.name}&apos;s review of you
+                    </p>
+                    <StarRating rating={cleanerReview.rating} />
+                    {cleanerReview.comment && (
+                      <p className="text-sm mt-2">{cleanerReview.comment}</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -260,10 +348,20 @@ export default async function JobDetailPage({
             </CardContent>
           </Card>
 
-          {/* Timeline */}
+          {/* Job Status Timeline */}
           <Card>
             <CardHeader>
-              <CardTitle>Timeline</CardTitle>
+              <CardTitle>Job Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <JobStatusTimeline currentStatus={job.status} />
+            </CardContent>
+          </Card>
+
+          {/* Key Dates */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Key Dates</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3 text-sm">

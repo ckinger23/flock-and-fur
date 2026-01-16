@@ -1,40 +1,18 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import type { UserRole } from "@prisma/client";
+import { authConfig } from "./auth.config";
 import type { Adapter } from "next-auth/adapters";
 
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string;
-      email: string;
-      name: string | null;
-      image: string | null;
-      role: UserRole;
-    };
-  }
-
-  interface User {
-    role: UserRole;
-  }
-}
-
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(db) as Adapter,
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
+    // Keep non-credentials providers from config
+    ...authConfig.providers.filter((p) => p.name !== "credentials"),
+    // Add credentials with database authorize function
     Credentials({
       name: "credentials",
       credentials: {
@@ -74,26 +52,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
-      if (user) {
-        token.id = user.id;
-        token.role = user.role;
-      }
-
-      // Handle session updates
-      if (trigger === "update" && session?.role) {
-        token.role = session.role;
-      }
-
-      return token;
-    },
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
-      }
-      return session;
-    },
+    ...authConfig.callbacks,
     async signIn({ user, account }) {
       // For OAuth sign-ins, ensure the user has a role
       if (account?.provider !== "credentials") {

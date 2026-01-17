@@ -20,43 +20,48 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          console.log("Auth: Missing email or password");
-          return null;
+        try {
+          if (!credentials?.email || !credentials?.password) {
+            console.error("Auth: Missing email or password");
+            throw new Error("Missing email or password");
+          }
+
+          const user = await db.user.findUnique({
+            where: { email: credentials.email as string },
+          });
+
+          if (!user) {
+            console.error("Auth: No user found for email:", credentials.email);
+            throw new Error("No user found");
+          }
+
+          if (!user.password) {
+            console.error("Auth: User has no password (OAuth user?):", credentials.email);
+            throw new Error("No password set");
+          }
+
+          const passwordMatch = await bcrypt.compare(
+            credentials.password as string,
+            user.password
+          );
+
+          if (!passwordMatch) {
+            console.error("Auth: Password mismatch for:", credentials.email);
+            throw new Error("Password mismatch");
+          }
+
+          console.error("Auth: Login successful for:", credentials.email);
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+            role: user.role,
+          };
+        } catch (error) {
+          console.error("Auth error:", error);
+          throw error;
         }
-
-        const user = await db.user.findUnique({
-          where: { email: credentials.email as string },
-        });
-
-        if (!user) {
-          console.log("Auth: No user found for email:", credentials.email);
-          return null;
-        }
-
-        if (!user.password) {
-          console.log("Auth: User has no password (OAuth user?):", credentials.email);
-          return null;
-        }
-
-        const passwordMatch = await bcrypt.compare(
-          credentials.password as string,
-          user.password
-        );
-
-        if (!passwordMatch) {
-          console.log("Auth: Password mismatch for:", credentials.email);
-          return null;
-        }
-
-        console.log("Auth: Login successful for:", credentials.email);
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-          role: user.role,
-        };
       },
     }),
   ],

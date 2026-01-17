@@ -1,8 +1,25 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { auth } from "@/lib/auth";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await auth();
+  const user = session?.user;
+
+  // Determine dashboard link based on role
+  const getDashboardLink = () => {
+    if (!user) return "/login";
+    switch (user.role) {
+      case "ADMIN":
+        return "/admin";
+      case "CLEANER":
+        return "/cleaner";
+      default:
+        return "/client";
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -12,12 +29,25 @@ export default function HomePage() {
             Flock & Fur
           </Link>
           <nav className="flex items-center gap-4">
-            <Link href="/login">
-              <Button variant="ghost">Log in</Button>
-            </Link>
-            <Link href="/register">
-              <Button>Get Started</Button>
-            </Link>
+            {user ? (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  Hi, {user.name || user.email}
+                </span>
+                <Link href={getDashboardLink()}>
+                  <Button>Dashboard</Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost">Log in</Button>
+                </Link>
+                <Link href="/register">
+                  <Button>Get Started</Button>
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -35,16 +65,26 @@ export default function HomePage() {
             Serving Birmingham, Alabama and surrounding areas.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register?role=client">
-              <Button size="lg" className="text-lg px-8">
-                I Need Cleaning
-              </Button>
-            </Link>
-            <Link href="/register?role=cleaner">
-              <Button size="lg" variant="outline" className="text-lg px-8">
-                I Want to Clean
-              </Button>
-            </Link>
+            {user ? (
+              <Link href={getDashboardLink()}>
+                <Button size="lg" className="text-lg px-8">
+                  Go to Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/register?role=client">
+                  <Button size="lg" className="text-lg px-8">
+                    I Need Cleaning
+                  </Button>
+                </Link>
+                <Link href="/register?role=cleaner">
+                  <Button size="lg" variant="outline" className="text-lg px-8">
+                    I Want to Clean
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -167,25 +207,27 @@ export default function HomePage() {
       </section>
 
       {/* CTA */}
-      <section className="py-24">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4">Ready to Get Started?</h2>
-          <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
-            Join the Flock & Fur community today. Whether you need cleaning
-            services or want to offer them, we&apos;ve got you covered.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register?role=client">
-              <Button size="lg">Find a Cleaner</Button>
-            </Link>
-            <Link href="/register?role=cleaner">
-              <Button size="lg" variant="outline">
-                Become a Cleaner
-              </Button>
-            </Link>
+      {!user && (
+        <section className="py-24">
+          <div className="container mx-auto px-4 text-center">
+            <h2 className="text-3xl font-bold mb-4">Ready to Get Started?</h2>
+            <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
+              Join the Flock & Fur community today. Whether you need cleaning
+              services or want to offer them, we&apos;ve got you covered.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/register?role=client">
+                <Button size="lg">Find a Cleaner</Button>
+              </Link>
+              <Link href="/register?role=cleaner">
+                <Button size="lg" variant="outline">
+                  Become a Cleaner
+                </Button>
+              </Link>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="border-t py-12 bg-muted/30">

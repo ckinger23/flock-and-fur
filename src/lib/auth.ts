@@ -10,8 +10,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(db) as Adapter,
   providers: [
-    // Keep non-credentials providers from config
-    ...authConfig.providers.filter((p) => p.name !== "credentials"),
+    // Include providers from config (Google)
+    ...authConfig.providers,
     // Add credentials with database authorize function
     Credentials({
       name: "credentials",

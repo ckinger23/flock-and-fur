@@ -1,6 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import Credentials from "next-auth/providers/credentials";
 import type { UserRole } from "@prisma/client";
 
 declare module "next-auth" {
@@ -39,16 +38,7 @@ export const authConfig: NextAuthConfig = {
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
-    // Credentials provider is configured in auth.ts with database access
-    Credentials({
-      name: "credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      // authorize is overridden in auth.ts
-      authorize: () => null,
-    }),
+    // Credentials provider is added in auth.ts (needs database access)
   ],
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
